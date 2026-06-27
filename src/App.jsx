@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import gscLogo from "./assets/gsc-logo.png";
 import {
   addDays,
   formatDayTab,
@@ -7,7 +8,7 @@ import {
   startOfWeekMonday,
   todayISO
 } from "./utils/dates";
-import { fetchCrossbarWeek } from "./services/crossbar";
+import { fetchCrossbarDay } from "./services/crossbar";
 
 function getInitialDate() {
   const params = new URLSearchParams(window.location.search);
@@ -20,18 +21,19 @@ function getInitialDate() {
   return todayISO();
 }
 
-function groupEventsByLocation(events) {
-  return events.reduce((groups, event) => {
-    const location = event.location || "TBD";
+function parseTimeMinutes(timeStr) {
+  const match = (timeStr || "").match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return 0;
+  let [, h, m, period] = match;
+  h = parseInt(h, 10);
+  m = parseInt(m, 10);
+  if (period.toUpperCase() === "PM" && h !== 12) h += 12;
+  if (period.toUpperCase() === "AM" && h === 12) h = 0;
+  return h * 60 + m;
+}
 
-    if (!groups[location]) {
-      groups[location] = [];
-    }
-
-    groups[location].push(event);
-
-    return groups;
-  }, {});
+function sortEventsChronologically(events) {
+  return [...events].sort((a, b) => parseTimeMinutes(a.from) - parseTimeMinutes(b.from));
 }
 
 function EventCard({ event }) {
@@ -78,9 +80,6 @@ export default function App() {
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [weekStart, setWeekStart] = useState(startOfWeekMonday(initialDate));
-  const [viewMode, setViewMode] = useState(
-    import.meta.env.VITE_DEFAULT_VIEW || "facility"
-  );
   const [days, setDays] = useState([]);
   const [status, setStatus] = useState("loading");
   const [errorMessage, setErrorMessage] = useState("");
@@ -94,8 +93,8 @@ export default function App() {
     };
   }, [days, selectedDate]);
 
-  const groupedEvents = useMemo(() => {
-    return groupEventsByLocation(selectedDay.events || []);
+  const sortedEvents = useMemo(() => {
+    return sortEventsChronologically(selectedDay.events || []);
   }, [selectedDay]);
 
   const totalWeekEvents = useMemo(() => {
@@ -108,29 +107,34 @@ export default function App() {
     async function loadSchedule() {
       setStatus("loading");
       setErrorMessage("");
+      setDays(weekDates.map((date) => ({ date, events: [], error: null })));
 
-      try {
-        const results = await fetchCrossbarWeek(weekStart, viewMode);
+      let successCount = 0;
 
-        if (!isMounted) return;
+      await Promise.all(
+        weekDates.map(async (dateISO) => {
+          try {
+            const result = await fetchCrossbarDay(dateISO);
+            if (!isMounted) return;
+            successCount++;
+            setDays((prev) => prev.map((d) => (d.date === dateISO ? result : d)));
+            if (successCount === 1) setStatus("ready");
+          } catch (error) {
+            if (!isMounted) return;
+            setDays((prev) =>
+              prev.map((d) =>
+                d.date === dateISO ? { date: dateISO, events: [], error: error.message } : d
+              )
+            );
+          }
+        })
+      );
 
-        setDays(results);
+      if (!isMounted) return;
 
-        const failedDays = results.filter((day) => day.error);
-
-        if (failedDays.length === results.length) {
-          setStatus("error");
-          setErrorMessage(
-            "Could not load the Crossbar schedule. Check your proxy settings."
-          );
-        } else {
-          setStatus("ready");
-        }
-      } catch (error) {
-        if (!isMounted) return;
-
+      if (successCount === 0) {
         setStatus("error");
-        setErrorMessage(error.message);
+        setErrorMessage("Could not load the Crossbar schedule. Check your proxy settings.");
       }
     }
 
@@ -139,7 +143,7 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [weekStart, viewMode]);
+  }, [weekStart]);
 
   function goToPreviousWeek() {
     const nextStart = addDays(weekStart, -7);
@@ -173,27 +177,10 @@ export default function App() {
           <div>
             <p className="eyebrow">Greenwich Skating Club</p>
             <h1>Schedule</h1>
-            <p className="header-subtitle">
-              Live schedule pulled from the public Crossbar schedule pages.
-            </p>
           </div>
 
-          <div className="view-toggle" aria-label="Schedule view selector">
-            <button
-              type="button"
-              className={viewMode === "facility" ? "active" : ""}
-              onClick={() => setViewMode("facility")}
-            >
-              Facility
-            </button>
-            <button
-              type="button"
-              className={viewMode === "club" ? "active" : ""}
-              onClick={() => setViewMode("club")}
-            >
-              Club
-            </button>
-          </div>
+          <img src={gscLogo} alt="Greenwich Skating Club" className="header-logo" />
+
         </header>
 
         <div className="controls-row">
@@ -276,25 +263,13 @@ export default function App() {
               </div>
             )}
 
-          {status === "ready" &&
-            Object.entries(groupedEvents).map(([location, events]) => (
-              <section className="location-group" key={location}>
-                <div className="location-heading">
-                  <h3>{location}</h3>
-                  <span>
-                    {events.length === 1
-                      ? "1 event"
-                      : `${events.length} events`}
-                  </span>
-                </div>
-
-                <div className="event-list">
-                  {events.map((event) => (
-                    <EventCard key={event.id} event={event} />
-                  ))}
-                </div>
-              </section>
-            ))}
+          {status === "ready" && sortedEvents.length > 0 && (
+            <div className="event-list">
+              {sortedEvents.map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+          )}
         </section>
       </section>
     </main>

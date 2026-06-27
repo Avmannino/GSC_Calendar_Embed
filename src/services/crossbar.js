@@ -1,4 +1,6 @@
-import { formatMonthDayYear, getWeekDates } from "../utils/dates";
+import { formatMonthDayYear } from "../utils/dates";
+
+const dayCache = new Map();
 
 const CLOUDFLARE_WORKER_PROXY =
   "https://gsc-calendar-proxy.amannino92.workers.dev/?path=";
@@ -216,6 +218,10 @@ function parseClubScheduleHtml(html, dateISO) {
 }
 
 export async function fetchCrossbarDay(dateISO) {
+  if (dayCache.has(dateISO)) {
+    return dayCache.get(dateISO);
+  }
+
   const path = `/schedule/${dateISO}`;
   const url = buildProxyUrl(path);
 
@@ -240,27 +246,8 @@ export async function fetchCrossbarDay(dateISO) {
     });
   }
 
-  return parseClubScheduleHtml(html, dateISO);
+  const result = parseClubScheduleHtml(html, dateISO);
+  dayCache.set(dateISO, result);
+  return result;
 }
 
-export async function fetchCrossbarWeek(startISO) {
-  const dates = getWeekDates(startISO);
-
-  const results = await Promise.all(
-    dates.map(async (dateISO) => {
-      try {
-        return await fetchCrossbarDay(dateISO);
-      } catch (error) {
-        console.error(`Failed loading ${dateISO}:`, error);
-
-        return {
-          date: dateISO,
-          events: [],
-          error: error.message
-        };
-      }
-    })
-  );
-
-  return results;
-}
