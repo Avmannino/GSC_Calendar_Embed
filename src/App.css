@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Barlow+Condensed:wght@700;800;900&display=swap");
 
 :root {
   font-family:
@@ -96,9 +96,10 @@ button {
 .eyebrow {
   margin: 0 0 8px;
   color: #ffffff;
-  font-size: 0.72rem;
-  font-weight: 850;
-  letter-spacing: 0.15em;
+  font-family: "Barlow Condensed", Arial Narrow, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   opacity: 0.86;
 }
@@ -112,10 +113,11 @@ p {
 
 h1 {
   margin-bottom: 8px;
+  font-family: "Barlow Condensed", Arial Narrow, sans-serif;
   font-size: clamp(2.25rem, 5vw, 4.6rem);
   font-weight: 900;
   line-height: 0.95;
-  letter-spacing: -0.055em;
+  letter-spacing: 0.01em;
 }
 
 h2 {
