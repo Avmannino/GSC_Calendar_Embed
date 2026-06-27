@@ -1,13 +1,47 @@
 import { formatMonthDayYear, getWeekDates } from "../utils/dates";
 
-const PROXY_BASE = import.meta.env.VITE_PROXY_BASE ?? "/crossbar";
+const CLOUDFLARE_WORKER_PROXY =
+  "https://gsc-calendar-proxy.amannino92.workers.dev/?path=";
+
+function getProxyBase() {
+  const hostname = window.location.hostname;
+
+  // Local Vite development uses the proxy inside vite.config.js
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return "/crossbar";
+  }
+
+  // GitHub Pages cannot run /api routes, so deployed GitHub Pages must use Cloudflare
+  if (hostname.includes("github.io")) {
+    return CLOUDFLARE_WORKER_PROXY;
+  }
+
+  // Optional: if you ever deploy to Vercel, this route would work there
+  if (hostname.includes("vercel.app")) {
+    return "/api/crossbar?path=";
+  }
+
+  // Default fallback for any other deployed host
+  return CLOUDFLARE_WORKER_PROXY;
+}
+
+const PROXY_BASE = getProxyBase();
+
+console.log("GSC calendar proxy base:", PROXY_BASE);
 
 function buildProxyUrl(path) {
+  if (PROXY_BASE.includes("?path=")) {
+    return `${PROXY_BASE}${encodeURIComponent(path)}`;
+  }
+
   return `${PROXY_BASE}${path}`;
 }
 
 function cleanText(value) {
-  return (value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  return (value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function getDocumentFromHtml(html) {
@@ -93,12 +127,12 @@ function parseTableRows(doc, dateISO) {
       events.push({
         id: `${dateISO}-${cells.join("-")}`,
         date: dateISO,
-        from: cells[0],
-        to: cells[1],
-        type: eventType,
-        team,
-        opponent,
-        title: opponent ? `${team} / ${opponent}` : team,
+        from: cleanText(cells[0]),
+        to: cleanText(cells[1]),
+        type: cleanText(eventType),
+        team: cleanText(team),
+        opponent: cleanText(opponent),
+        title: opponent ? `${cleanText(team)} / ${cleanText(opponent)}` : cleanText(team),
         location: "Facility",
         sourceView: "facility"
       });
